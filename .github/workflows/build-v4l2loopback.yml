@@ -128,8 +128,22 @@ jobs:
         make oldconfig
         make prepare
         
-        # 修复 asm/types.h 找不到的问题
-        ln -sf $(pwd)/arch/arm64/include/asm $(pwd)/include/asm
+        # Ensure asm headers available: prefer arch-specific, fall back to generic
+        if [ -d arch/arm64/include/asm ]; then
+          ln -sfn arch/arm64/include/asm include/asm
+        else
+          ln -sfn include/asm-generic include/asm || true
+        fi
+
+        # Ensure uapi asm headers exist (some kernels put uapi headers separately)
+        if [ -d arch/arm64/include/uapi/asm ]; then
+          mkdir -p include/uapi
+          ln -sfn arch/arm64/include/uapi/asm include/uapi/asm
+        else
+          mkdir -p include/uapi
+          ln -sfn include/uapi/asm-generic include/uapi/asm || true
+        fi
+
         echo "✓ Kernel version:"
         head -5 Makefile | grep VERSION
         echo "CONFIG_MODULES: $(grep ^CONFIG_MODULES .config)"
