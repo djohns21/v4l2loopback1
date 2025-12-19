@@ -126,6 +126,8 @@ jobs:
         
         echo "Generating kernel header files..."
         make ARCH=arm64 CROSS_COMPILE=aarch64-linux-android- prepare 2>&1 | tail -20 || true
+        make ARCH=arm64 CROSS_COMPILE=aarch64-linux-android- oldconfig
+        make ARCH=arm64 CROSS_COMPILE=aarch64-linux-android- prepare
         
         echo "✓ Kernel version:"
         head -5 Makefile | grep VERSION
