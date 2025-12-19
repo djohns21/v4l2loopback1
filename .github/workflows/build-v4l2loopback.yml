@@ -142,7 +142,7 @@ jobs:
         rm main.zip
         
         mv v4l2loopback-main/* .
-        rmdir v4l2loopback-main
+        rm -rf v4l2loopback-main
         
         echo "✓ v4l2loopback source ready"
         ls -la
