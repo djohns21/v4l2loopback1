@@ -1,0 +1,203 @@
+# Git 忽略文件
+# 避免提交大文件和编译产物到 GitHub
+
+# 编译产物
+*.ko
+*.o
+*.a
+*.so
+*.d
+*.cmd
+*.obj
+*.lib
+*.exp
+*.exe
+*.dll
+*.pdb
+*.idb
+*.ilk
+*.tlog/
+.cache.mk
+Module.symvers
+modules.order
+
+# 构建目录
+build/
+out/
+dist/
+target/
+obj/
+bin/
+Release/
+Debug/
+x64/
+
+# 内核源码（在 GitHub Actions 中下载）
+kernel-src/
+kernel/
+.kernel
+*.tar.gz
+
+# Android NDK（在 GitHub Actions 中下载）
+android-ndk/
+ndk/
+tools/
+
+# v4l2loopback 源码（在 GitHub Actions 中下载）
+v4l2loopback/
+v4l2loopback-src/
+*.zip
+
+# Frida 相关（不需要）
+frida-server*
+*.xz
+
+# 临时文件和日志
+*.yuv
+*.bin
+*.log
+*_log.txt
+debug_log*.txt
+full_log.txt
+camera_log.txt
+search_result*.txt
+
+# 测试和调试文件
+test_*.py
+test_*.png
+test_*.js
+search_*.py
+search_*.bat
+
+# Android 构建产物
+android/viewer/.gradle/
+android/viewer/app/build/
+android/viewer/build/
+android/**/build/
+*.apk
+*.aar
+*.dex
+*.class
+*.jar
+
+# Gradle
+.gradle/
+gradle-wrapper.jar
+local.properties
+
+# Python 缓存
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyc
+
+# 截图和图片
+*.png
+phone_screen.png
+screenshot.png
+qr_preview.png
+
+# Frida 脚本（历史版本）
+mms/frida_*.js
+mms/decompiled/
+frida_*.py
+frida_*.js
+
+# 其他临时文件
+wechat_camera_hook.js
+*.bak
+*.tmp
+
+# IDE 和编辑器
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+*.sublime-project
+*.sublime-workspace
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# 日志文件
+*.log
+*.log.*
+logs/
+build.log
+
+# 临时文件
+*.tmp
+*.bak
+*.swp
+*~
+.#*
+\#*\#
+
+# 操作系统
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Desktop.ini
+
+# IDE 自动生成
+.vscode/
+.idea/
+*.iml
+.gradle
+local.properties
+
+# 本地配置（如果需要）
+local.config
+.env.local
+config.local.yaml
+
+# 大文件缓存
+cache/
+.cache/
+tmp/
+
+# Git 文件
+.git/
+.gitmodules
+
+# GitHub Pages
+_site/
+
+# 测试覆盖率
+coverage/
+.coverage
+
+# Misc
+*.pid
+*.seed
+.env
+.env.*.local

@@ -1,0 +1,319 @@
+name: Build v4l2loopback for Redmi 13R 5G
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'src/**'
+      - '.github/workflows/build-v4l2loopback.yml'
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+env:
+  KERNEL_VERSION: 5.10.149
+  KERNEL_TAG: android12-5.10.149_r00
+  NDK_VERSION: r25c
+  TARGET_ARCH: aarch64
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v3
+      with:
+        fetch-depth: 0
+
+    - name: Cache kernel source
+      id: cache-kernel
+      uses: actions/cache@v3
+      with:
+        path: kernel-src
+        key: kernel-${{ env.KERNEL_TAG }}-${{ runner.os }}
+        restore-keys: |
+          kernel-${{ env.KERNEL_TAG }}-
+
+    - name: Download kernel source
+      if: steps.cache-kernel.outputs.cache-hit != 'true'
+      run: |
+        mkdir -p kernel-src
+        echo "Downloading Google ACK kernel ${{ env.KERNEL_TAG }}..."
+        wget -q https://android.googlesource.com/kernel/common/+archive/refs/tags/${{ env.KERNEL_TAG }}.tar.gz -O kernel.tar.gz
+        tar -xzf kernel.tar.gz -C kernel-src --strip-components=0
+        rm kernel.tar.gz
+        echo "✓ Kernel source ready"
+        ls -la kernel-src | head -20
+
+    - name: Cache NDK
+      id: cache-ndk
+      uses: actions/cache@v3
+      with:
+        path: android-ndk
+        key: ndk-${{ env.NDK_VERSION }}-linux-${{ runner.os }}
+        restore-keys: |
+          ndk-${{ env.NDK_VERSION }}-
+
+    - name: Download Android NDK
+      if: steps.cache-ndk.outputs.cache-hit != 'true'
+      run: |
+        echo "Downloading Android NDK ${{ env.NDK_VERSION }}..."
+        mkdir -p android-ndk
+        cd android-ndk
+        wget -q https://dl.google.com/android/repository/android-ndk-${{ env.NDK_VERSION }}-linux.zip
+        unzip -q android-ndk-${{ env.NDK_VERSION }}-linux.zip
+        rm android-ndk-${{ env.NDK_VERSION }}-linux.zip
+        echo "✓ NDK installed"
+        ls -la
+
+    - name: Install build dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y \
+          build-essential \
+          libelf-dev \
+          libssl-dev \
+          bc \
+          bison \
+          flex \
+          git \
+          python3 \
+          cpio \
+          wget \
+          rsync
+
+    - name: Prepare kernel for compilation
+      run: |
+        cd kernel-src
+        
+        echo "Generating Android kernel configuration for ARM64..."
+        touch .config
+        
+        # 设置关键配置项
+        cat > fragment.config << 'EOF'
+        CONFIG_MODULES=y
+        CONFIG_MODULE_UNLOAD=y
+        CONFIG_MODVERSIONS=y
+        CONFIG_LOCALVERSION=-android12-9
+        CONFIG_LOCALVERSION_AUTO=n
+        CONFIG_VIDEO_V4L2=y
+        CONFIG_VIDEO_DEV=y
+        CONFIG_VIDEO_V4L2_SUBDEV_API=y
+        CONFIG_VIDEOBUF2_CORE=y
+        CONFIG_VIDEOBUF2_MEMOPS=y
+        CONFIG_VIDEOBUF2_V4L2=y
+        CONFIG_VIDEOBUF2_DMA_CONTIG=y
+        CONFIG_FRAME_VECTOR=y
+        EOF
+        
+        cp fragment.config .config
+        
+        echo "Applying kernel configuration..."
+        make ARCH=arm64 CROSS_COMPILE=aarch64-linux-android- defconfig 2>/dev/null || true
+        
+        # Merge custom configuration
+        scripts/config --file .config \
+          -e MODULES \
+          -e MODULE_UNLOAD \
+          -e MODVERSIONS \
+          -e VIDEO_V4L2 \
+          -e VIDEO_DEV \
+          -e VIDEO_V4L2_SUBDEV_API \
+          -e VIDEOBUF2_CORE \
+          -e VIDEOBUF2_MEMOPS \
+          -e VIDEOBUF2_V4L2 || true
+        
+        echo "Generating kernel header files..."
+        make ARCH=arm64 CROSS_COMPILE=aarch64-linux-android- prepare 2>&1 | tail -20 || true
+        
+        echo "✓ Kernel version:"
+        head -5 Makefile | grep VERSION
+        echo "CONFIG_MODULES: $(grep ^CONFIG_MODULES .config)"
+
+    - name: Download v4l2loopback source
+      run: |
+        echo "Downloading v4l2loopback..."
+        mkdir -p v4l2loopback-src
+        cd v4l2loopback-src
+        
+        wget -q https://github.com/umlaeute/v4l2loopback/archive/refs/heads/main.zip
+        unzip -q main.zip
+        rm main.zip
+        
+        mv v4l2loopback-main/* .
+        rmdir v4l2loopback-main
+        
+        echo "✓ v4l2loopback source ready"
+        ls -la
+
+    - name: Build v4l2loopback module
+      run: |
+        export KERNEL_SRC=$(pwd)/kernel-src
+        export CROSS_COMPILE=aarch64-linux-android-
+        export ARCH=arm64
+        export NDK_PATH=$(pwd)/android-ndk/android-ndk-${{ env.NDK_VERSION }}
+        
+        # Set up cross compilation toolchain
+        export PATH="${NDK_PATH}/toolchains/llvm/prebuilt/linux-x86_64/bin:$PATH"
+        export CC=aarch64-linux-android21-clang
+        export CXX=aarch64-linux-android21-clang++
+        export LD=aarch64-linux-android-ld
+        export STRIP=aarch64-linux-android-strip
+        
+        cd v4l2loopback-src
+        
+        echo "Building v4l2loopback.ko..."
+        echo "Kernel source: $KERNEL_SRC"
+        echo "Cross compile: $CROSS_COMPILE"
+        
+        make \
+          KERNELDIR=$KERNEL_SRC \
+          CROSS_COMPILE=$CROSS_COMPILE \
+          ARCH=$ARCH \
+          CC=$CC \
+          LD=$LD \
+          LDFLAGS= \
+          CFLAGS_MODULE="-fPIC" \
+          -C $KERNEL_SRC \
+          M=$(pwd) \
+          modules \
+          2>&1 | tee build.log
+        
+        if [ -f v4l2loopback.ko ]; then
+          echo "✓ v4l2loopback.ko compiled successfully"
+          ls -lh v4l2loopback.ko
+          file v4l2loopback.ko
+        else
+          echo "✗ Compilation failed"
+          tail -100 build.log
+          exit 1
+        fi
+
+    - name: Verify module
+      run: |
+        cd v4l2loopback-src
+        echo "Module details:"
+        file v4l2loopback.ko
+        aarch64-linux-android-nm v4l2loopback.ko | head -20 || true
+
+    - name: Generate build info
+      if: success()
+      run: |
+        cat > build-info.txt << 'EOF'
+        =================================================
+        v4l2loopback Build Information
+        =================================================
+        
+        Device: Redmi 13R 5G (air-t)
+        Target Kernel: 5.10.149-android12-9
+        Architecture: arm64 (aarch64)
+        Build Date: $(date)
+        
+        Module File: v4l2loopback.ko
+        
+        Installation Instructions:
+        ===========================
+        
+        1. Push module to device:
+           adb push v4l2loopback.ko /data/local/tmp/
+        
+        2. Load module:
+           adb shell "su -c 'insmod /data/local/tmp/v4l2loopback.ko'"
+        
+        3. Verify installation:
+           adb shell "lsmod | grep v4l2loopback"
+           adb shell "ls -la /dev/video*"
+        
+        4. Create virtual camera:
+           adb shell "su -c 'insmod /data/local/tmp/v4l2loopback.ko video_nr=10 card_label=VirtualCam'"
+        
+        Troubleshooting:
+        ================
+        
+        If you see "version magic" mismatch error:
+        - The vermagic may need adjustment
+        - Run: adb shell cat /proc/version
+        - Update CONFIG_LOCALVERSION in kernel config to match
+        
+        If insmod fails with permission denied:
+        - Ensure device is rooted
+        - Try: adb shell "su"
+        - Or use Magisk to load the module
+        
+        =================================================
+        EOF
+        cat build-info.txt
+
+    - name: Upload artifacts
+      if: success()
+      uses: actions/upload-artifact@v3
+      with:
+        name: v4l2loopback-ko-${{ env.KERNEL_VERSION }}
+        path: |
+          v4l2loopback-src/v4l2loopback.ko
+          build-info.txt
+        retention-days: 30
+
+    - name: Create Release
+      if: success() && github.event_name == 'push' && github.ref == 'refs/heads/main'
+      uses: softprops/action-gh-release@v1
+      with:
+        files: |
+          v4l2loopback-src/v4l2loopback.ko
+          build-info.txt
+        tag_name: build-${{ github.run_number }}
+        body: |
+          ## v4l2loopback Build #${{ github.run_number }}
+          
+          **设备**: Redmi 13R 5G (Xiaomi air-t)
+          **内核**: 5.10.149-android12-9
+          **架构**: ARM64 (aarch64)
+          **编译日期**: ${{ github.event.head_commit.timestamp }}
+          
+          ### 文件列表
+          - `v4l2loopback.ko` - 编译好的内核模块
+          - `build-info.txt` - 编译信息
+          
+          ### 快速安装
+          
+          ```bash
+          # 推送到设备
+          adb push v4l2loopback.ko /data/local/tmp/
+          
+          # 加载模块
+          adb shell "su -c 'insmod /data/local/tmp/v4l2loopback.ko'"
+          
+          # 验证加载
+          adb shell "lsmod | grep v4l2loopback"
+          adb shell "ls -la /dev/video*"
+          ```
+          
+          ### 创建虚拟摄像头
+          
+          ```bash
+          # 指定虚拟设备编号
+          adb shell "su -c 'insmod /data/local/tmp/v4l2loopback.ko video_nr=10 card_label=\"VirtualCam\"'"
+          ```
+          
+          ### 故障排除
+          
+          如果遇到 "version magic" 错误，表示内核配置不匹配：
+          
+          ```bash
+          adb shell "cat /proc/version"
+          ```
+          
+          应该显示 `5.10.149-android12-9`。
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Build failed notification
+      if: failure()
+      run: |
+        echo "❌ Build failed! Check logs above for details."
+        echo "Common issues:"
+        echo "1. Kernel source download failed - check network"
+        echo "2. NDK toolchain download failed - check network"
+        echo "3. Compilation errors - check kernel config"
+        exit 1
