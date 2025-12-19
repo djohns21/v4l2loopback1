@@ -22,13 +22,13 @@ jobs:
     
     steps:
     - name: Checkout repository
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
       with:
         fetch-depth: 0
 
     - name: Cache kernel source
       id: cache-kernel
-      uses: actions/cache@v3
+      uses: actions/cache@v4
       with:
         path: kernel-src
         key: kernel-${{ env.KERNEL_TAG }}-${{ runner.os }}
@@ -48,7 +48,7 @@ jobs:
 
     - name: Cache NDK
       id: cache-ndk
-      uses: actions/cache@v3
+      uses: actions/cache@v4
       with:
         path: android-ndk
         key: ndk-${{ env.NDK_VERSION }}-linux-${{ runner.os }}
@@ -247,7 +247,7 @@ jobs:
 
     - name: Upload artifacts
       if: success()
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: v4l2loopback-ko-${{ env.KERNEL_VERSION }}
         path: |
