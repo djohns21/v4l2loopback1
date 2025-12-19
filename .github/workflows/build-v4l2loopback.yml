@@ -128,6 +128,8 @@ jobs:
         make oldconfig
         make prepare
         
+        # 修复 asm/types.h 找不到的问题
+        ln -sf $(pwd)/arch/arm64/include/asm $(pwd)/include/asm
         echo "✓ Kernel version:"
         head -5 Makefile | grep VERSION
         echo "CONFIG_MODULES: $(grep ^CONFIG_MODULES .config)"
