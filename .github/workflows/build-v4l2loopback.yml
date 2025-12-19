@@ -178,6 +178,21 @@ jobs:
         export LD=aarch64-linux-android-ld
         export STRIP=aarch64-linux-android-strip
         
+        # Ensure kernel include asm headers exist in KERNEL_SRC before building modules
+        if [ -d "$KERNEL_SRC/arch/arm64/include/asm" ]; then
+          ln -sfn "$KERNEL_SRC/arch/arm64/include/asm" "$KERNEL_SRC/include/asm"
+        else
+          ln -sfn "$KERNEL_SRC/include/asm-generic" "$KERNEL_SRC/include/asm" || true
+        fi
+
+        if [ -d "$KERNEL_SRC/arch/arm64/include/uapi/asm" ]; then
+          mkdir -p "$KERNEL_SRC/include/uapi"
+          ln -sfn "$KERNEL_SRC/arch/arm64/include/uapi/asm" "$KERNEL_SRC/include/uapi/asm"
+        else
+          mkdir -p "$KERNEL_SRC/include/uapi"
+          ln -sfn "$KERNEL_SRC/include/uapi/asm-generic" "$KERNEL_SRC/include/uapi/asm" || true
+        fi
+
         cd v4l2loopback-src
         
         echo "Building v4l2loopback.ko..."
